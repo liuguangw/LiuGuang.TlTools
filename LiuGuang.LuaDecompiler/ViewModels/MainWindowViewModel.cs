@@ -131,11 +131,6 @@ namespace LiuGuang.LuaDecompiler.ViewModels
                     {
                         var srcFilePath = files[i];
                         var distPath = Path.Combine(OutputPath, srcFilePath.Substring(luaPath.Length + 1));
-                        var distDir = Path.GetDirectoryName(distPath);
-                        if (!Directory.Exists(distDir))
-                        {
-                            Directory.CreateDirectory(distDir);
-                        }
                         await DecompileFileAsync(srcFilePath, distPath);
                         ProcessCount++;
                     }
@@ -186,6 +181,12 @@ namespace LiuGuang.LuaDecompiler.ViewModels
                 stream.Seek(0x60, SeekOrigin.Begin);
                 var dataLength = (int)stream.Length - 0x60;
                 var data = await decryptDataAsync(stream, dataLength);
+                //创建文件夹
+                var distDir = Path.GetDirectoryName(distPath);
+                if (!Directory.Exists(distDir))
+                {
+                    Directory.CreateDirectory(distDir);
+                }
                 //写入文件
                 using (var outputStream = new FileStream(distPath, FileMode.OpenOrCreate, FileAccess.Write))
                 {
