@@ -113,9 +113,7 @@ namespace LiuGuang.LuaDecompiler.ViewModels
         /// </summary>
         private async void DoDecompileAsync()
         {
-            //todo
             RunningTask = true;
-            FileStream interfaceStream = null;
             try
             {
                 await Task.Run(async () =>
@@ -149,13 +147,6 @@ namespace LiuGuang.LuaDecompiler.ViewModels
             {
                 ProcessCount = 0;
                 MessageBox.Show(ex.Message /*+ "\n" + ex.StackTrace*/, "出错了", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                if (interfaceStream != null)
-                {
-                    interfaceStream.Dispose();
-                }
             }
             RunningTask = false;
 

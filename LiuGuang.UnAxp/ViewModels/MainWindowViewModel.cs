@@ -108,7 +108,6 @@ namespace LiuGuang.UnAxp.ViewModels
         /// </summary>
         private async void DoUnpackAsync()
         {
-            //todo
             RunningTask = true;
             try
             {

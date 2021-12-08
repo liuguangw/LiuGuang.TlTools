@@ -112,7 +112,6 @@ namespace LiuGuang.AssetChecker.ViewModels
         /// </summary>
         private async void DoCheckAsync()
         {
-            //todo
             RunningTask = true;
             FileStream interfaceStream = null;
             try
