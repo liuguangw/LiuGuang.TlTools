@@ -16,7 +16,8 @@ namespace LiuGuang.LuaDecompiler.ViewModels
         private string luaPath = string.Empty;
         private string outputPath = string.Empty;
         private bool runningTask = false;
-        private byte[] keyData;
+        private byte[] hjKeyData;
+        private byte[] gfKeyData;
         private int processCount = 0;
         private int totalFileCount = 100;
         #endregion
@@ -118,9 +119,13 @@ namespace LiuGuang.LuaDecompiler.ViewModels
             {
                 await Task.Run(async () =>
                 {
-                    if (keyData == null)
+                    if (hjKeyData == null)
                     {
-                        keyData = await LoadKeyDataAsync();
+                        hjKeyData = await LoadKeyDataAsync("hj");
+                    }
+                    if (gfKeyData == null)
+                    {
+                        gfKeyData = await LoadKeyDataAsync("gf");
                     }
                     //读取lua文件列表
                     var files = Directory.GetFiles(LuaPath, "*.lua", SearchOption.AllDirectories);
@@ -147,9 +152,9 @@ namespace LiuGuang.LuaDecompiler.ViewModels
 
         }
 
-        private async Task<byte[]> LoadKeyDataAsync()
+        private async Task<byte[]> LoadKeyDataAsync(string keyType)
         {
-            var uri = new Uri("key.data", UriKind.Relative);
+            var uri = new Uri(keyType + "_key.data", UriKind.Relative);
             var info = Application.GetResourceStream(uri);
             byte[] buff;
             using (var stream = info.Stream)
@@ -167,41 +172,81 @@ namespace LiuGuang.LuaDecompiler.ViewModels
             {
                 return;
             }
-            byte[] flag = { 0x84, 0xcc, 0xfa, 0x75 };
+            //创建文件夹
+            var distDir = Path.GetDirectoryName(distPath);
+            if (!Directory.Exists(distDir))
+            {
+                Directory.CreateDirectory(distDir);
+            }
+            //两种加密标识
+            byte[] hjFlag = { 0x84, 0xCC, 0xFA, 0x75, 0x9A, 0x9D, 0x3B, 0x6D };
+            byte[] gfFlag = { 0xD2, 0xD1, 0xE2, 0xE1, 0xB2, 0xB1, 0xC2, 0xC1 };
             using (var stream = new FileStream(srcFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 //判断是否为加密格式
-                var tmpBuff = new byte[4];
+                var tmpBuff = new byte[8];
                 await stream.ReadAsync(tmpBuff, 0, tmpBuff.Length);
-                if (!Enumerable.SequenceEqual(flag, tmpBuff))
+                if (Enumerable.SequenceEqual(hjFlag, tmpBuff))
                 {
-                    return;
+                    //seek
+                    stream.Seek(0x60, SeekOrigin.Begin);
+                    var dataLength = (int)stream.Length - 0x60;
+                    var data = await decryptHjDataAsync(stream, dataLength);
+                    //写入文件
+                    using (var outputStream = new FileStream(distPath, FileMode.OpenOrCreate, FileAccess.Write))
+                    {
+                        await outputStream.WriteAsync(data, 0, dataLength);
+                    }
+
                 }
-                //seek
-                stream.Seek(0x60, SeekOrigin.Begin);
-                var dataLength = (int)stream.Length - 0x60;
-                var data = await decryptDataAsync(stream, dataLength);
-                //创建文件夹
-                var distDir = Path.GetDirectoryName(distPath);
-                if (!Directory.Exists(distDir))
+                else if (Enumerable.SequenceEqual(gfFlag, tmpBuff))
                 {
-                    Directory.CreateDirectory(distDir);
+
+                    //seek
+                    stream.Seek(0x100, SeekOrigin.Begin);
+                    var dataLength = (int)stream.Length - 0x100;
+                    var data = await decryptGfDataAsync(stream, dataLength);
+                    //写入文件
+                    using (var outputStream = new FileStream(distPath, FileMode.OpenOrCreate, FileAccess.Write))
+                    {
+                        await outputStream.WriteAsync(data, 0, dataLength);
+                    }
                 }
-                //写入文件
-                using (var outputStream = new FileStream(distPath, FileMode.OpenOrCreate, FileAccess.Write))
+                else
                 {
-                    await outputStream.WriteAsync(data, 0, dataLength);
+                    //copy文件
+                    File.Copy(srcFilePath, distPath, true);
                 }
             }
         }
 
-        private async Task<byte[]> decryptDataAsync(FileStream stream, int dataLength)
+        private async Task<byte[]> decryptHjDataAsync(FileStream stream, int dataLength)
         {
             var data = new byte[dataLength];
             await stream.ReadAsync(data, 0, dataLength);
             for (var i = 0; i < data.Length; i++)
             {
+                data[i] ^= hjKeyData[i % hjKeyData.Length];
+            }
+            return data;
+        }
+        private async Task<byte[]> decryptGfDataAsync(FileStream stream, int dataLength)
+        {
+            var keyData = new byte[gfKeyData.Length];
+            gfKeyData.CopyTo(keyData, 0);
+            var data = new byte[dataLength];
+            await stream.ReadAsync(data, 0, dataLength);
+            for (var i = 0; i < data.Length; i++)
+            {
                 data[i] ^= keyData[i % keyData.Length];
+                if (i == keyData.Length - 1)
+                {
+                    //重置
+                    for (var j = 0; j < keyData.Length; j++)
+                    {
+                        keyData[j] = (j % 2 == 0) ? (byte)0x41 : (byte)0x53;
+                    }
+                }
             }
             return data;
         }
